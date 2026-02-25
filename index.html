@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cursor Trail</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 100%;
+  height: 100vh;
+  background: #191919;
+  overflow: hidden;
+  cursor: none;
+  font-family: 'Georgia', serif;
+}
+
+/* Custom cursor dot */
+#cursor {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease;
+  mix-blend-mode: difference;
+}
+
+/* Each trail image */
+.trail-img {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  border-radius: 4px;
+  object-fit: cover;
+  opacity: 0;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+/* ── TITLE ── */
+#title {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.86);
+  display: flex;
+  gap: 0;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  animation: titleRise 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes titleRise {
+  0%   { transform: translate(-50%, -50%) scale(0.86); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1);    opacity: 1; }
+}
+
+.title-char {
+  font-family: 'Playfair Display', 'Georgia', serif;
+  font-size: clamp(16px, 1.6vw, 24px);
+  font-weight: 400;
+  color: #fff;
+  letter-spacing: 0.03em;
+  opacity: 0;
+  display: inline-block;
+  white-space: pre;
+  transition: opacity 0.7s ease;
+}
+
+/* initial dim state — all chars barely visible like the reference */
+.title-char.dim {
+  opacity: 0.08;
+}
+
+/* revealed state */
+.title-char.reveal {
+  opacity: 1;
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="title"></div>
+
+<script>
+// ── CONFIGURE YOUR IMAGES HERE ──────────────────────────────
+const IMAGES = [
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/1.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/2.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/3.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/4.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/5.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/6.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/7.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/8.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/9.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/10.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/11.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/12.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/13.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/14.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/15.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/16.jpeg?raw=true',
+  'https://github.com/rutz-exe/cursor-trail-new/blob/main/3.jpg?raw=true',
+];
+
+// ── SETTINGS ─────────────────────────────────────────────────
+const MIN_DISTANCE   = 100;
+const MAX_IMAGES     = 6;
+const FADE_AFTER_MS  = 500;   // visible for 0.5s
+const MIN_W          = 245;
+const MAX_W          = 245;
+const MIN_H          = 170;
+const MAX_H          = 170;
+const MAX_ROT        = 0;     // 0° rotation — straight images
+// ─────────────────────────────────────────────────────────────
+
+// ── TITLE REVEAL ─────────────────────────────────────────────
+const titleEl = document.getElementById('title');
+const titleText = 'slice of life <3';
+
+// Build character spans, all start invisible
+titleText.split('').forEach(char => {
+  const span = document.createElement('span');
+  span.className = 'title-char';
+  span.textContent = char;
+  titleEl.appendChild(span);
+});
+
+const chars = titleEl.querySelectorAll('.title-char');
+
+// Step 1: mid-rise, make all chars ghosted (barely visible)
+setTimeout(() => {
+  chars.forEach(c => c.classList.add('dim'));
+}, 400);
+
+// Step 2: after rise settles, reveal each char left to right
+setTimeout(() => {
+  chars.forEach((char, i) => {
+    setTimeout(() => {
+      char.classList.remove('dim');
+      char.classList.add('reveal');
+    }, i * 70);
+  });
+}, 1700);
+// ─────────────────────────────────────────────────────────────
+const cursor = document.getElementById('cursor');
+const body   = document.body;
+
+let mouseX = 0, mouseY = 0;
+let lagX = 0, lagY = 0;
+let lastSpawnX = -999, lastSpawnY = -999;
+let imgIndex = 0;
+const pool = [];
+
+// Preload images
+IMAGES.forEach(src => { const i = new Image(); i.src = src; });
+
+const shuffled = [...IMAGES].sort(() => Math.random() - 0.5);
+let shuffleIdx = 0;
+function nextImage() {
+  if (shuffleIdx >= shuffled.length) {
+    shuffled.sort(() => Math.random() - 0.5);
+    shuffleIdx = 0;
+  }
+  return shuffled[shuffleIdx++];
+}
+
+document.addEventListener('mousemove', e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+
+  // Spawn based on actual mouse distance for no gaps
+  const dx = mouseX - lastSpawnX;
+  const dy = mouseY - lastSpawnY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist >= MIN_DISTANCE) {
+    lastSpawnX = mouseX;
+    lastSpawnY = mouseY;
+    spawnImage(mouseX, mouseY);
+  }
+});
+
+// Lerp loop — lagged cursor dot only
+const LERP = 0.12;
+function tick() {
+  lagX += (mouseX - lagX) * LERP;
+  lagY += (mouseY - lagY) * LERP;
+  cursor.style.left = lagX + 'px';
+  cursor.style.top  = lagY + 'px';
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+function spawnImage(x, y) {
+  if (pool.length >= MAX_IMAGES) {
+    const oldest = pool.shift();
+    fadeOut(oldest);
+  }
+
+  const src  = nextImage();
+  const rot  = (Math.random() * MAX_ROT * 2 - MAX_ROT).toFixed(2);
+
+  const img = document.createElement('img');
+  img.className = 'trail-img';
+  img.src = src;
+  img.style.width  = MIN_W + 'px';
+  img.style.height = MIN_H + 'px';
+  img.style.left   = (x - MIN_W / 2) + 'px';
+  img.style.top    = (y - MIN_H / 2) + 'px';
+  img.style.transform = `rotate(${rot}deg) scale(0.85)`;
+  img.style.zIndex = 100 + (imgIndex++ % 50);
+
+  body.appendChild(img);
+  pool.push(img);
+
+  // Remove immediately if image fails to load
+  img.onerror = () => {
+    const idx = pool.indexOf(img);
+    if (idx !== -1) pool.splice(idx, 1);
+    if (img.parentNode) img.parentNode.removeChild(img);
+  };
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      img.style.opacity = '1';
+      img.style.transform = `rotate(${rot}deg) scale(1)`;
+    });
+  });
+
+  setTimeout(() => {
+    const idx = pool.indexOf(img);
+    if (idx !== -1) pool.splice(idx, 1);
+    fadeOut(img);
+  }, FADE_AFTER_MS + Math.random() * 800);
+}
+
+function fadeOut(el) {
+  if (!el || !el.parentNode) return;
+  el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+  el.style.opacity = '0';
+  el.style.transform = el.style.transform.replace('scale(1)', 'scale(0.95)');
+  setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 350);
+}
+</script>
+</body>
+</html>
